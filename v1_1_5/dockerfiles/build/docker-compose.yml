@@ -1,0 +1,51 @@
+version: "2"
+
+volumes:
+  mysql_data:
+  project:
+   driver: local
+
+services:
+  zenbership:
+      image: try.direct/zenbership:1.1.5
+      build: zenbership
+      env_file: .env
+      entrypoint: /usr/bin/supervisord -c /etc/supervisord.conf -n
+      volumes:
+        - ./zenbership/configs/supervisor/supervisord.conf:/etc/supervisor/conf.d/zenbership.conf
+        - ./zenbership/configs/php/php-fpm.d:/usr/local/etc/php-fpm.d
+        - ./zenbership/configs/php/fpm/php.ini:/usr/local/etc/php/php.ini
+        - ./zenbership/configs/config.php:/var/www/html/zenbership-115/admin/sd-system/config.php
+        - project:/var/www/html
+      links:
+        - mysql
+#      ports:
+#       - "9000:9000"
+
+  nginx:
+    image: ${REGISTRY}optimum/nginx-le:stable
+    env_file: .env
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./certs/ssl:/etc/ssl/nginx
+      - ./certs/letsencrypt:/etc/letsencrypt
+      - ./nginx/configs/cron/nginx:/var/spool/cron/crontabs
+      - ./nginx/configs/conf.d:/etc/nginx/conf.d/
+      - ./nginx/configs/nginx.conf:/etc/nginx/nginx.conf
+      - ./null:/etc/nginx/sites-enabled
+      - ./nginx/configs/supervisor/nginx.conf:/etc/supervisor/conf.d/nginx.conf
+      - project:/var/www/html
+    links:
+      - zenbership
+    entrypoint: /usr/bin/supervisord -c /etc/supervisor/supervisord.conf -n
+
+  mysql:
+      image: mysql:5.7
+      volumes:
+        - mysql_data:/var/lib/mysql
+        - ./configs/minimal.cnf:/etc/mysql/conf.d/minimal.cnf
+        - ./configs/custom.cnf:/etc/mysql/conf.d/custom.cnf
+      env_file: .env
+      restart: always
